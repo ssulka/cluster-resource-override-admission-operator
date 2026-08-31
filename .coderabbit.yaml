@@ -1,0 +1,130 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Docs: https://docs.coderabbit.ai/getting-started/configure-coderabbit
+
+language: en-US
+early_access: false
+
+reviews:
+  profile: "chill"
+  high_level_summary: false
+  poem: false
+  request_changes_workflow: false
+  collapse_walkthrough: true
+
+  path_filters:
+    - "!vendor/**"
+    - "!**/vendor/**"
+    - "!**/zz_generated*"
+    - "!go.sum"
+
+  path_instructions:
+    - path: "pkg/clusterresourceoverride/internal/handlers/**/*.go"
+      instructions: |
+        These are sequential reconciliation handler chain steps for the
+        ClusterResourceOverride controller. If a handler returns an error or
+        requests requeue, the chain stops; later handlers may assume earlier
+        handlers succeeded. Each handler must still be idempotent. Review for
+        correct status condition updates, proper error wrapping, and that
+        handler ordering assumptions are documented.
+
+    - path: "pkg/clusterresourceoverride/internal/reconciler/**/*.go"
+      instructions: |
+        The reconciler orchestrates the handler chain and updates CR status.
+        The ClusterResourceOverride CR is a singleton named "cluster" — verify
+        that changes respect this constraint. Review for correct deepcopy usage,
+        proper status update error handling, and idempotent reconciliation.
+
+    - path: "pkg/resourceoverride/**/*.go"
+      instructions: |
+        The ResourceOverride controller manages namespace-scoped override CRs
+        and watches namespace events. It validates spec (including podSelector
+        syntax) and sets status conditions. Matching pods against podSelector
+        is done by the admission webhook operand, not this controller. Review
+        for correct namespace event handling and status condition updates.
+
+    - path: "pkg/apis/**/*.go"
+      instructions: |
+        CRD API types for ClusterResourceOverride (operator/v1) and
+        ResourceOverride (autoscaling/v1). Review for backward compatibility,
+        correct JSON tags with omitempty on optional fields, and deepcopy
+        compliance. API changes require running `make codegen` and updating
+        the matching CRD YAML in manifests/stable/.
+
+    - path: "pkg/asset/**/*.go"
+      instructions: |
+        Builds Kubernetes resource manifests (Deployment, Service, ConfigMap,
+        MutatingWebhookConfiguration, etc.) in Go code. Review for correct
+        resource metadata, standard ownerReferences via SetController, security
+        context settings, and compatibility with the operand image. Owner
+        annotations on pod templates are a secondary-watch fallback, not a
+        replacement for ownerReferences.
+
+    - path: "pkg/ensurer/**/*.go"
+      instructions: |
+        Ensures Kubernetes resources exist and are up to date using dynamic
+        client operations. Review for correct create-or-update semantics,
+        proper error handling on conflict, and idempotent behavior.
+
+    - path: "pkg/runtime/ownership.go"
+      instructions: |
+        Sets standard Kubernetes ownerReferences from the cluster-scoped
+        ClusterResourceOverride onto dependents. Do not replace this with
+        annotation-only ownership. A cluster-scoped owner of namespaced
+        dependents is valid.
+
+    - path: "**/*_test.go"
+      instructions: |
+        Review tests for table-driven patterns where appropriate, proper
+        resource cleanup, deterministic test names, and realistic timeouts.
+        This repo uses the Go testing package together with testify
+        (assert/require).
+
+    - path: "test/e2e/**/*.go"
+      instructions: |
+        E2E tests require a running OpenShift cluster. Review for proper
+        resource cleanup, realistic timeouts, and that test assumptions
+        match the operator's singleton CR constraint (name must be "cluster").
+
+    - path: "manifests/**/*.yaml"
+      instructions: |
+        CRD YAMLs in manifests/stable/ are manually maintained. Review for
+        correct API version, proper validation rules, and backward
+        compatibility. Also check CSV, RBAC, and NetworkPolicy manifests
+        for least-privilege and correct namespace references.
+
+    - path: "artifacts/deploy/**/*.yaml"
+      instructions: |
+        Kubernetes manifests for non-OLM deployment. Check for correct
+        namespace references, RBAC least privilege, resource limits,
+        and securityContext settings.
+
+    - path: "**/{Dockerfile,Dockerfile.*}"
+      instructions: |
+        Review for multi-stage builds, no secrets or credentials in the
+        image, correct base images, and minimal image size.
+
+    - path: "hack/**"
+      instructions: |
+        CI and development helper scripts. Check for correct error handling
+        (set -e or set -o errexit), and that the script matches what CI expects.
+
+  tools:
+    gitleaks:
+      enabled: true
+    golangci-lint:
+      enabled: true
+    hadolint:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/AGENTS.md"
+      - "**/CONTRIBUTING.md"
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
