@@ -1,6 +1,14 @@
 # Overview
 This operator manages OpenShift `ClusterResourceOverride` Admission Webhook Server.
 
+| Resource | Link |
+|---|---|
+| Operand repo | [openshift/cluster-resource-override-admission](https://github.com/openshift/cluster-resource-override-admission) |
+| CI configuration | [openshift/release/.../cluster-resource-override-admission-operator/](https://github.com/openshift/release/tree/master/ci-operator/config/openshift/cluster-resource-override-admission-operator/) |
+| OpenShift docs | [Cluster Resource Override](https://docs.openshift.com/container-platform/latest/nodes/clusters/nodes-cluster-resource-override.html) |
+| Contributor guide | [CONTRIBUTING.md](./CONTRIBUTING.md) |
+| AI agent guidance | [AGENTS.md](./AGENTS.md) |
+
 Scheduling is based on resources requested, while quota and hard limits refer to resource limits, which can be set higher 
 than requested resources. The difference between request and limit determines the level of overcommit; for instance, 
 if a container is given a memory request of `1Gi` and a memory limit of `2Gi`, it is scheduled based on the `1Gi` request 
@@ -30,7 +38,8 @@ A quick way to test your changes is to build the operator binary and run it dire
 make build
 
 # the operator owns a CRD, so register the CRD
-kubectl apply -f artifacts/olm/manifests/clusterresourceoverride/1.0.0/clusterresourceoverride.crd.yaml 
+kubectl apply -f manifests/stable/clusterresourceoverride.crd.yaml
+kubectl apply -f manifests/stable/resourceoverride.crd.yaml
 
 # make sure you have a cluster up and running
 # create a namespace where the operator binary will manage its resource(s)
