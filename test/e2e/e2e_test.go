@@ -756,7 +756,8 @@ func TestResourceOverrideAdmissionMultipleOverrides(t *testing.T) {
 
 // TestResourceOverrideAdmissionWithDistinctPodSelectors verifies that
 // ResourceOverrides with distinct pod selectors independently mutate their
-// corresponding pod groups in one namespace.
+// corresponding pod groups, fall back to the CRO when none match, and select
+// the lexicographically first override in a selector and catch-all conflict.
 func TestResourceOverrideAdmissionWithDistinctPodSelectors(t *testing.T) {
 	client := helper.NewClient(t, options.config)
 
@@ -786,6 +787,15 @@ func TestResourceOverrideAdmissionWithDistinctPodSelectors(t *testing.T) {
 		Limits: corev1.ResourceList{
 			corev1.ResourceMemory: resource.MustParse("1024Mi"),
 			corev1.ResourceCPU:    resource.MustParse("1000m"),
+		},
+	}
+	croWant := map[string]corev1.ResourceRequirements{
+		"test": {
+			Limits: requirements.Limits,
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("102Mi"),
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+			},
 		},
 	}
 
@@ -838,6 +848,39 @@ func TestResourceOverrideAdmissionWithDistinctPodSelectors(t *testing.T) {
 	t.Log("verifying the batch selector applies its ResourceOverride")
 	_, batchPodDisposer := helper.EventuallyMustMatchPodMutationWithLabels(t, client.Kubernetes, ns.GetName(), "test", requirements, map[string]string{"workload": "batch"}, batchWant)
 	defer batchPodDisposer.Dispose()
+
+	t.Log("verifying a pod that matches no selector falls back to the CRO")
+	_, fallbackPodDisposer := helper.EventuallyMustMatchPodMutationWithLabels(t, client.Kubernetes, ns.GetName(), "test", requirements, map[string]string{"workload": "database"}, croWant)
+	defer fallbackPodDisposer.Dispose()
+
+	catchAllSpec := autoscalingv1.ResourceOverrideSpec{
+		PodResourceOverride: autoscalingv1.PodResourceOverrideSpec{
+			CPURequestToLimitPercent:    50,
+			MemoryRequestToLimitPercent: 25,
+		},
+	}
+	catchAllWant := map[string]corev1.ResourceRequirements{
+		"test": {
+			Limits: requirements.Limits,
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("256Mi"),
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+			},
+		},
+	}
+
+	t.Log("creating a catch-all ResourceOverride")
+	_, catchAllDisposer := helper.CreateResourceOverride(t, client.Operator, ns.GetName(), "z-catch-all", catchAllSpec)
+	defer catchAllDisposer.Dispose()
+	helper.WaitForResourceOverrideCondition(t, client.Operator, ns.GetName(), "z-catch-all", helper.IsResourceOverrideValidationPassing)
+
+	t.Log("verifying the lexicographically first selector ResourceOverride wins over the catch-all")
+	_, mixedSelectorPodDisposer := helper.EventuallyMustMatchPodMutationWithLabels(t, client.Kubernetes, ns.GetName(), "test", requirements, map[string]string{"workload": "frontend"}, frontendWant)
+	defer mixedSelectorPodDisposer.Dispose()
+
+	t.Log("verifying the catch-all ResourceOverride applies when no selector matches")
+	_, catchAllPodDisposer := helper.EventuallyMustMatchPodMutationWithLabels(t, client.Kubernetes, ns.GetName(), "test", requirements, map[string]string{"workload": "database"}, catchAllWant)
+	defer catchAllPodDisposer.Dispose()
 }
 
 func TestResourceOverrideAdmissionWithPodSelector(t *testing.T) {
