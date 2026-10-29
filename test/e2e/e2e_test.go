@@ -668,6 +668,8 @@ func TestResourceOverrideAdmissionOverridesPod(t *testing.T) {
 	helper.MustMatchMemoryAndCPU(t, resourceWant, &podGot.Spec)
 }
 
+// TestResourceOverrideAdmissionWithLimitRange verifies that namespace-scoped
+// ResourceOverrides honor LimitRange maximums, minimums, and default limits.
 func TestResourceOverrideAdmissionWithLimitRange(t *testing.T) {
 	tests := []struct {
 		name           string
